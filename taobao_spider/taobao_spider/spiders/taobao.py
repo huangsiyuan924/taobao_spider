@@ -48,18 +48,43 @@ class TaobaoSpider(scrapy.Spider):
         # 下一页的url
         next_page = 'https://re.taobao.com/search?keyword=%E9%92%88%E7%BB%87%E8%BF%9E%E8%A1%A3%E8%A3%99&page=' + str(self.page)
         # # 宝贝标题
-        # title = response.xpath('//span[@class="title"]//text()').extract()
+        baby_title_list = response.xpath('//span[@class="title"]//text()').extract()
         # 宝贝详情url
         baby_url_list = response.xpath('//div[@class="item"]/a/@href').extract()
+        # 一页的宝贝价格列表
         baby_price_list = response.xpath('//span[@class="pricedetail"]/strong/text()').extract()
-        for baby_url, baby_price in zip(baby_url_list, baby_price_list):
+        # 付款人数
+        pay_num = response.xpath('//span[@class="payNum"]/text()').extract()
+        pay_num_list = [i.replace("人付款", "") for i in pay_num ]
+        print(len(pay_num_list))
+        # 商品描述得分
+        detail_score_list = response.xpath('//span[@class="active dsr-info-tgr"]/span[@class="dsr-info-num"]/text()').extract()
+
+
+        for i in range(len(baby_url_list)):
             yield scrapy.Request(
-                url=baby_url,
-                meta={"baby_price": baby_price},
-                dont_filter=True,
-                callback=self.parse_page_detail
+                url=baby_url_list[i],
+                meta={
+                    "baby_title": baby_title_list[i],
+                    "baby_price": baby_price_list[i],
+                    "pay_num": pay_num_list[i],
+                    "detail_score": detail_score_list[i]
+                },
+                callback=self.base_parse
             )
 
+
+
+
+        #
+        # for baby_url, baby_price in zip(baby_url_list, baby_price_list):
+        #     yield scrapy.Request(
+        #         url=baby_url,
+        #         meta={"baby_price": baby_price},
+        #         dont_filter=True,
+        #         callback=self.parse_page_detail
+        #     )
+        #
         yield scrapy.Request(
             url=next_page,
             dont_filter=True,
@@ -79,13 +104,13 @@ class TaobaoSpider(scrapy.Spider):
 
 
         # 宝贝链接
-        baby_url = 'https://item.taobao.com/item.htm?id=' + baby_id
+        baby_url = 'https://item.taobao.com/item.htm?id=' + str(baby_id)
         # 宝贝标题
         baby_title = str(response.xpath('//h3[@class="tb-main-title"]/text()').extract_first()).strip()
         # 店家名字
         shop_name = str(response.xpath('//div[@class="tb-shop-name"]//a/text()').extract_first()).strip()
         # 店家url
-        shop_url = "http://shop" + seller_id +".taobao.com"
+        shop_url = "http://shop" + str(seller_id) +".taobao.com"
         # 宝贝现价格
         baby_currency_price = response.meta['baby_price']
 
@@ -207,4 +232,25 @@ class TaobaoSpider(scrapy.Spider):
         item["bad_comments_count"] = bad_comments_count
 
 
+        yield item
+
+
+    def base_parse(self, response):
+        # 宝贝url
+        baby_url = response.url.split("&ali_")[0]
+        # 宝贝id
+        baby_id = baby_url.split("id=")[1]
+
+        baby_title = response.meta["baby_title"]
+        baby_price = response.meta["baby_price"]
+        pay_num = response.meta["pay_num"]
+        detail_score = response.meta["detail_score"]
+
+        item = TaobaoSpiderItem()
+        item["baby_id"] = baby_id
+        item["baby_title"] = baby_title
+        item["baby_price"] = baby_price
+        item["pay_num"] = pay_num
+        item["detail_score"] = detail_score
+        item["baby_url"] = baby_url
         yield item
